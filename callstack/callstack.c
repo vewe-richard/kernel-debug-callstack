@@ -46,7 +46,7 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs)
     
 
     printk("kprobe function (%s) in handler_pre(), for %d times(left: %d)\n", 
-            _pCallstack->function_name, _pCallstack->times, _pCallstack->count);
+            _pCallstack->function_name, _pCallstack->times, _pCallstack->count - 1);
 
 #if 0
     td = (struct thread_info *)(regs->ARM_sp & ~(THREAD_SIZE - 1));
@@ -73,7 +73,7 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs)
     {
         if(_pCallstack->enable)
         {
-            unregister_kprobe(&_pCallstack->kp);
+//            unregister_kprobe(&_pCallstack->kp);
         }
         _pCallstack->enable = 0;
     }
