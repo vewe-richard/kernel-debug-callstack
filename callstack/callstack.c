@@ -167,15 +167,15 @@ static ssize_t enable_store(struct kobject *kobj,
 
 
 static struct kobj_attribute times_attribute =
-    __ATTR(times, 0666, times_show,
+    __ATTR(times, 0660, times_show,
            (void*)times_store);
 
 static struct kobj_attribute function_name_attribute =
-    __ATTR(function_name, 0666, name_show,
+    __ATTR(function_name, 0660, name_show,
            (void*)name_store);
 
 static struct kobj_attribute enable_attribute =
-    __ATTR(enable, 0666, enable_show,
+    __ATTR(enable, 0660, enable_show,
            (void*)enable_store);
 
 static int __init mymodule_init (void)

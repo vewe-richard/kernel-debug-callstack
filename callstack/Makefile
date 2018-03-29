@@ -1,8 +1,10 @@
-obj-m += callstack.o
+obj-m := tracecallstack.o
+
+tracecallstack-objs := callstack.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
-	rm -f *.o *.ko *.mod.* *.order *.symvers
+	rm -f *.o *.ko *.mod.* *.order *.symvers 
