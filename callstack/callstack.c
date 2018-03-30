@@ -14,7 +14,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vewe Richard");
 
-#define ARCH_ARM
+//#define ARCH_ARM
 
 typedef struct stCallstack {
     char function_name[100];
@@ -35,48 +35,41 @@ static Callstack _callstack = {
 
 static Callstack *_pCallstack = &_callstack;
 
+static int print_frame(struct stackframe *sf, void *data)
+{
+    printk("fp: %pS, sp:%pS, lr: %pS, pc: %pS\n", (void *)sf->fp, (void *)sf->sp, (void *)sf->lr, (void *)sf->pc);
+    return 0;
+}
+
 /* kprobe pre_handler: called just before the probed instruction is executed */
+//Note: can not call unregister_kprobe inside the pre handler
 static int handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
-#if 0
+#ifdef ARCH_ARM
     struct thread_info * td;
     struct stackframe sf;
     struct task_struct * tsk;
 #endif
     
+    if(_pCallstack->count <= 0) return;
+
+    _pCallstack->count --;
 
     printk("kprobe function (%s) in handler_pre(), for %d times(left: %d)\n", 
-            _pCallstack->function_name, _pCallstack->times, _pCallstack->count - 1);
+            _pCallstack->function_name, _pCallstack->times, _pCallstack->count);
 
-#if 0
+#ifdef ARCH_ARM
     td = (struct thread_info *)(regs->ARM_sp & ~(THREAD_SIZE - 1));
     tsk = td->task;
 
-    printk("task pid: %d\n", tsk->pid);
-    printk("stack %p\n", tsk->stack);
-    printk("name %s\n", tsk->comm);
+    printk("task pid: %d, name %s\n", tsk->pid, tsk->comm);
+
     sf.fp = regs->ARM_fp;
     sf.sp = regs->ARM_sp;
     sf.lr = regs->ARM_lr;
     sf.pc = regs->ARM_pc;
-    trace_printk("kprobe start jiangjqian\n");
     walk_stackframe(&sf, print_frame, NULL);
-    trace_printk("kprobe end jiangjqian\n");
 #endif
-
-    if(_pCallstack->count > 0)
-    {
-        _pCallstack->count --;
-    }
-
-    if(_pCallstack->count == 0)
-    {
-        if(_pCallstack->enable)
-        {
-//            unregister_kprobe(&_pCallstack->kp);
-        }
-        _pCallstack->enable = 0;
-    }
     return 0;
 }
 
@@ -140,6 +133,7 @@ static ssize_t enable_store(struct kobject *kobj,
 {
     if(_pCallstack->enable)
     {
+        //TODO? Call unregister_kprobe here may block the system???
         unregister_kprobe(&_pCallstack->kp);
     }
 
