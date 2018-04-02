@@ -10,11 +10,13 @@
 #include <linux/string.h>
 #include <linux/kprobes.h>
 #include <asm/stacktrace.h>
+#include <linux/delay.h>
+#include <linux/slab.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vewe Richard");
 
-//#define ARCH_ARM
+#define ARCH_ARM
 
 typedef struct stCallstack {
     char function_name[100];
@@ -24,7 +26,7 @@ typedef struct stCallstack {
     unsigned int count;
 
     struct kobject * kobj;
-    struct kprobe kp;
+    struct kprobe * kp;
 }Callstack;
 
 static Callstack _callstack = {
@@ -51,7 +53,7 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs)
     struct task_struct * tsk;
 #endif
     
-    if(_pCallstack->count <= 0) return;
+    if(_pCallstack->count <= 0) return 0;
 
     _pCallstack->count --;
 
@@ -131,19 +133,29 @@ static ssize_t enable_store(struct kobject *kobj,
                                 struct kobj_attribute *attr,
                                 char *buf, size_t count)
 {
-    if(_pCallstack->enable)
-    {
-        //TODO? Call unregister_kprobe here may block the system???
-        unregister_kprobe(&_pCallstack->kp);
-    }
+    unsigned int enable;
+    int ret;
+    struct kprobe * kp;
 
-    sscanf(buf, "%u", &(_pCallstack->enable));
-    if(_pCallstack->enable)
+    sscanf(buf, "%u", &enable);
+    if(enable == 1)
     {
-	int ret;
-        struct kprobe * kp;
+        if(_pCallstack->kp)
+        {
+            printk("callstack: please disable previous kprobe first (echo 0 > /sys/kernel/callstack/enable)");
+            return -1;
+        }
 
-        kp = &_pCallstack->kp;
+        _pCallstack->kp = (struct kprobe *)kmalloc(sizeof(struct kprobe), GFP_KERNEL);
+        if(_pCallstack->kp == NULL)
+        {
+            printk("callstack: lack of memory\n");
+            return -1;
+        }
+
+        memset(_pCallstack->kp, 0, sizeof(struct kprobe));
+
+        kp = _pCallstack->kp;
 
         kp->symbol_name = _pCallstack->function_name;
 	kp->pre_handler = handler_pre;
@@ -153,8 +165,32 @@ static ssize_t enable_store(struct kobject *kobj,
 	ret = register_kprobe(kp);
         _pCallstack->count = _pCallstack->times;
 	if (ret < 0) {
+            printk("callstack: register kprobe failed %d\n", ret);
+            kfree(_pCallstack->kp);
+            _pCallstack->kp = NULL;
             _pCallstack->enable = 0;
 	}
+        else
+        {
+            printk("callstack: register kprobe success\n");
+            _pCallstack->enable = 1;
+        }
+    }
+    else if(enable == 0)
+    {
+        if(_pCallstack->kp)
+        {
+            unregister_kprobe(_pCallstack->kp);
+            kfree(_pCallstack->kp);
+            _pCallstack->kp = NULL;
+            printk("callstack: kprobe unregister\n");
+            _pCallstack->enable = 0;
+        }
+    }
+    else
+    {
+        printk("callstack: invalid input to enable, only 0 and 1 are allowed\n");
+        return -1;
     }
     return count;
 }
@@ -176,7 +212,7 @@ static int __init mymodule_init (void)
 {
     int error = 0;
 
-    printk("mymodule: initialised\n");
+    printk("callstack: initialised\n");
 
     _pCallstack->kobj =
         kobject_create_and_add("callstack", kernel_kobj);
@@ -206,12 +242,13 @@ static int __init mymodule_init (void)
 
 static void __exit mymodule_exit (void)
 {
-    printk("mymodule: Exit success\n");
+    printk("callstack: Exit success\n");
     kobject_put(_pCallstack->kobj);
-    if(_pCallstack->enable)
+    if(_pCallstack->kp)
     {
-        printk("unregister kprobe\n");
-        unregister_kprobe(&_pCallstack->kp);
+        printk("callstack: unregister kprobe\n");
+        unregister_kprobe(_pCallstack->kp);
+        kfree(_pCallstack->kp);
     }
 }
 
